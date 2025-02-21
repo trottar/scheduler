@@ -481,7 +481,10 @@ def update_schedule(selected_day=None):
 
         if selected_day != today:
             edit_button.configure(style="Past.TButton")  # Everything gray
-            frame.configure(background=bg_color)  # Keep background neutral
+            frame_style = f"CustomFrame{bg_color.replace('#', '')}.TFrame"
+            style = ttk.Style()
+            style.configure(frame_style, background=bg_color)
+            frame.configure(style=frame_style)            
         else:
             if status == "past":
                 edit_button.configure(style="Past.TButton")  # Past = Gray
