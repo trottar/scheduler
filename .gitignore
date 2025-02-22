@@ -1,4 +1,5 @@
 winter2025*json
 *.bat
 *.vbs
+*.lock
 __pycache__
