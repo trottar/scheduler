@@ -236,7 +236,7 @@ def get_next_day_start_time(schedule, current_day):
 
 def undo_last_change():
     """Restores the most recent backup available, allowing multiple undos."""
-    backup_dir = "backups"
+    backup_dir = f"{scheduler_dir}/backups"
     existing_backups = sorted(
         [f for f in os.listdir(backup_dir) if f.startswith("winter2025_backup")],
         reverse=True

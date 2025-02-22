@@ -69,7 +69,7 @@ def sort_schedule(schedule):
         # ✅ Sort strictly by start time
         schedule[day] = sorted(schedule[day], key=event_key)
 
-    return schedule
+    return 		
 
 def backup_schedule():
     """Creates a timestamped backup of winter2025.json and maintains a history."""
