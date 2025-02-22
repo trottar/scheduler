@@ -155,14 +155,24 @@ def update_json_schedule(day, old_start, new_start, new_end, new_activity):
     events.append([f"{new_start} - {new_end}", f"{new_activity} {temp_marker}"])
     print(f"✔ Inserted temporary event: {new_start} - {new_end} ({new_activity})")
 
-    # ✅ Step 2: Run overlap detection, which will handle deletion
+    # **Step 2: Call `check_for_overlap()` BEFORE inserting the new event**
     check_for_overlap(actual_day, new_start, new_end, expanded_schedule)
 
-    # ✅ Step 3: Remove the temporary marker to finalize insertion
+    # **Step 3: Ensure the event exists in the schedule after overlap checking**
+    event_exists = any(e[0] == f"{new_start} - {new_end}" and new_activity in e[1] for e in events)
+
+    if not event_exists:
+        clean_activity = new_activity.replace("##TEMP##", "").strip()
+        print(f"⚠ Event not found after overlap check! Re-inserting: {new_start} - {new_end} ({clean_activity})")
+        events.append([f"{new_start} - {new_end}", clean_activity])
+    else:
+        print(f"✅ Event already exists after overlap check: {new_start} - {new_end}")
+
+    # **Extra Fail-Safe: Final Pass to Remove Any `##TEMP##` Left**
     for i, entry in enumerate(events):
-        if temp_marker in entry[1]:
-            events[i][1] = entry[1].replace(temp_marker, "").strip()
-            print(f"✅ Finalized event: {events[i][0]} {events[i][1]}")
+        if "##TEMP##" in entry[1]:
+            print(f"⚠ Cleaning up lingering `##TEMP##` in {entry}")
+            events[i][1] = entry[1].replace("##TEMP##", "").strip()
 
     # **Step 4: Call `check_for_overlap()` again AFTER inserting the new event**
     check_for_overlap(actual_day, new_start, new_end, expanded_schedule)
@@ -330,14 +340,19 @@ def check_for_overlap(day, start, end, schedule):
             continue
 
         entry_start, entry_end = event_time.split(" - ")
-        entry_start_dt = datetime.datetime.strptime(entry_start.strip(), time_format)
-        entry_end_dt = datetime.datetime.strptime(entry_end.strip(), time_format)
+        
+        #print(f"🔍 Checking event: {entry_start} - {entry_end} ({entry[1]}) on {day}")
+
+        entry_start_dt = datetime.datetime.strptime(entry_start.strip(), "%I:%M %p")
+        entry_end_dt = datetime.datetime.strptime(entry_end.strip(), "%I:%M %p")
 
         # ✅ Handle cases where the event occurs after midnight but belongs to the same logical day
         if entry_start_dt.hour < 5:
-            entry_start_dt += datetime.timedelta(days=1)  # Move it forward to align with the correct day
+            entry_start_dt += datetime.timedelta(days=1)
         if entry_end_dt.hour < 5:
             entry_end_dt += datetime.timedelta(days=1)
+
+        print(f"⏳ Adjusted times for comparison: {entry_start_dt} - {entry_end_dt}")
 
         print(f"🔍 Checking: {entry_start} - {entry_end} ({entry[1]})")
 
@@ -446,7 +461,7 @@ def adjust_schedule(schedule):
             start_time, *end_time = map(str.strip, time_range.split('-'))
 
             # 🔍 Debug: Before modification
-            print(f"🔍 Checking event: {start_time} - {end_time if end_time else 'No End Time'} ({activity}) on {day}")
+            #print(f"🔍 Checking event: {start_time} - {end_time if end_time else 'No End Time'} ({activity}) on {day}")
 
             # ✅ If event already has an end time, do nothing
             if end_time:
