@@ -53,25 +53,25 @@ def load_schedule(filename="winter2025.json"):
 def sort_schedule(schedule):
     """Sorts each day's events chronologically, treating 5:00 AM as the new day start."""
     time_format = "%I:%M %p"
-    
-    aliases = load_aliases()  # Load dynamic alias mappings
 
     for day in schedule:
-        if day in aliases:  # Skip alias template days dynamically
-            continue
-        
         def event_key(event):
             start_time = event[0].split(" - ")[0].strip()
             dt = datetime.datetime.strptime(start_time, time_format)
-            
-            # Shift pre-5 AM events to the end of the day
+
+            # ✅ If an event is before 5 AM, it is still part of the previous day for sorting
             if dt.hour < 5:
-                dt += datetime.timedelta(days=1)
+                dt += datetime.timedelta(days=1)  # Moves pre-5 AM events to correct order
 
             return dt
-        
-        schedule[day] = sorted(schedule[day], key=event_key)  # Maintain existing structure
-    
+
+        # ✅ Sort strictly by start time
+        schedule[day] = sorted(schedule[day], key=event_key)
+
+    print(f"\n🔍 Debugging Sort Order for {day}:")
+    for event in schedule[day]:
+        print(f" - {event[0]} {event[1]}")
+
     return schedule
 
 def backup_schedule():
@@ -252,9 +252,14 @@ def delete_event(day, start):
         event_start = entry[0].split(" - ")[0].strip()
 
         if start.strip() == event_start:
-            deleted_event = events.pop(i)  # Remove the event
+            if "-" not in entry[0]:  # ✅ Ensures single-time events are never removed
+                print(f"⚠ Skipping deletion of single-time event: {entry[1]}")
+                continue
+
+            deleted_event = events.pop(i)
             print(f"🗑 Deleted event: {deleted_event}")
             break
+
     else:
         print(f"⚠ No matching event found for {start} on {day} ({actual_day}). No changes made.")
         return
@@ -291,29 +296,17 @@ def delete_event(day, start):
 def check_for_overlap(day, start, end, schedule):
     """Removes fully overlapped events, pushes forward future events, and shortens past events."""
 
-    aliases = load_aliases()  # Load dynamic alias mappings
+    print(f"\n🔎 Running Full Overlap Verification on {day}: Editing {start} - {end}\n")
 
-    # Dynamically resolve the alias for the selected day
-    actual_day = day
-    for alias, mapped_days in aliases.items():
-        if day in mapped_days:
-            actual_day = alias
-            break  # Stop checking once an alias is found
-            
     time_format = "%I:%M %p"
     start_dt = datetime.datetime.strptime(start, time_format)
     end_dt = datetime.datetime.strptime(end, time_format)
 
-    modified = False  # Track if changes were made
-
-    print(f"\n🔎 Running Full Overlap Verification on {day}: Editing {start} - {end}\n")
-
-    i = 0  # Use index tracking to avoid issues when modifying list
+    i = 0
     while i < len(schedule[day]):
         entry = schedule[day][i]
         event_time = entry[0].strip()
 
-        # Skip single-time events
         if " - " not in event_time:
             i += 1
             continue
@@ -322,36 +315,42 @@ def check_for_overlap(day, start, end, schedule):
         entry_start_dt = datetime.datetime.strptime(entry_start.strip(), time_format)
         entry_end_dt = datetime.datetime.strptime(entry_end.strip(), time_format)
 
+        print(f"🔍 Checking: {entry_start} - {entry_end} ({entry[1]})")
+
         # **CASE 1: The new event fully overlaps an existing one → DELETE**
         if start_dt <= entry_start_dt and end_dt >= entry_end_dt:
-            print(f"🗑 Removing '{entry[1]}' as it is fully within {start} - {end}.")
-            schedule[day].pop(i)  # Remove the fully overlapped event
-            modified = True
-            continue  # Don't increment i, as we removed an element
+            print(f"🗑 Removing '{entry[1]}' because it is fully within {start} - {end}.")
+            del schedule[day][i]
+            continue  # Skip incrementing i because we removed an entry
 
         # **CASE 2: The new event STARTS during an existing event → SHORTEN PAST EVENT**
         elif entry_start_dt < start_dt < entry_end_dt:
             print(f"🔄 Shortening '{entry[1]}' end time from {entry_end} to {start} to prevent overlap.")
-            schedule[day][i][0] = f"{entry_start} - {start}"  # Adjust event to end before new start
-            modified = True
+            schedule[day][i][0] = f"{entry_start} - {start}"
 
         # **CASE 3: The new event ENDS during an existing event → PUSH FUTURE EVENT FORWARD**
         elif entry_start_dt < end_dt < entry_end_dt:
             print(f"🔄 Adjusting '{entry[1]}' start time from {entry_start} to {end} to prevent overlap.")
-            schedule[day][i][0] = f"{end} - {entry_end}"  # Move event forward
-            modified = True
-            
+            schedule[day][i][0] = f"{end} - {entry_end}"
+
         # **CASE 4: Adjust Only the Next Event's Start Time**
         elif entry_start_dt >= end_dt:
-            new_start_str = end_dt.strftime(time_format)
-            print(f"⏩ Adjusting '{entry[1]}' start time from {entry_start} to {new_start_str}.")
-            schedule[day][i][0] = f"{new_start_str} - {entry_end}"  # Only adjust start, keep end unchanged
-            modified = True
-            break  # Stop adjusting further events          
+            # ✅ Only adjust if the event is actually part of the same overnight sequence
+            if entry_start_dt.hour < 5 and end_dt.hour > 18:
+                new_start_str = end_dt.strftime(time_format)
+                print(f"⏩ Adjusting overnight event '{entry[1]}' start time from {entry_start} to {new_start_str}.")
+                schedule[day][i][0] = f"{new_start_str} - {entry_end}"
+                modified = True
+            else:
+                print(f"⚠ Skipping adjustment for '{entry[1]}' (morning event) to avoid breaking schedule.")
+
+            break  # Stop adjusting further events
 
         i += 1  # Move to next event
 
-    return modified
+    print("\n✅ Final Schedule After Overlap Check:")
+    for event in schedule[day]:
+        print(f" - {event[0]} {event[1]}")
 
 # Function to expand schedule templates (MW & TTh)
 def expand_schedule(schedule):

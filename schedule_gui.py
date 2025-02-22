@@ -59,43 +59,90 @@ def save_preferences(preferences):
         json.dump(preferences, file)
 
 # Toggle Dark Mode
-def toggle_dark_mode(root):
+def toggle_dark_mode(root, selected_day):
     preferences = load_preferences()
-    dark_mode = not preferences["dark_mode"]  # Flip the state
+    dark_mode = not preferences["dark_mode"]
 
-    # Apply styles based on mode
+    # ✅ Apply dark mode styles
     apply_dark_mode(root, dark_mode)
 
-    # Save user preference
+    # ✅ Save user preference
     preferences["dark_mode"] = dark_mode
     save_preferences(preferences)
 
-    # Update button text
+    # ✅ Update button text
     if "dark_mode_button" in globals():
         dark_mode_button.config(text="☀ Light Mode" if dark_mode else "🌙 Dark Mode")
 
+    # ✅ Preserve the selected day when updating the schedule
+    update_schedule(selected_day)
+    
 def apply_dark_mode(root, dark_mode):
     """Applies dark or light mode dynamically."""
-    # Ensure style is initialized
     style = ttk.Style()
     if dark_mode:
         root.tk_setPalette(background="#1e1e1e", foreground="white")
-        style.configure("TFrame", background="#1e1e1e")
+
+        # ✅ Ensure all frames match dark mode
+        style.configure("TFrame", background="#1e1e1e", borderwidth=0, relief="flat")
+        style.configure("CustomFrame.TFrame", background="#1e1e1e", borderwidth=0, relief="flat")
+
+        # ✅ Ensure all labels match dark mode (Fixes Weekly Summary gray boxes)
         style.configure("TLabel", background="#1e1e1e", foreground="white")
-        style.configure("TButton", background="#333", foreground="white")
-        style.configure("Past.TButton", foreground="gray")
-        style.configure("Ongoing.TButton", foreground="red")
-        style.configure("Future.TButton", foreground="white")
+
+        # ✅ Ensure Weekly Summary header matches dark mode
+        style.configure("SummaryHeader.TFrame", background="#3a3a3a", relief="flat")
+
+        # ✅ Fix buttons (Ensures event buttons don’t have gray boxes)
+        style.configure("TButton",
+                        background="#1e1e1e",
+                        foreground="white",
+                        relief="flat",
+                        borderwidth=0,
+                        highlightthickness=0,
+                        padding=5)
+
+        # ✅ Ensure Weekly Summary labels blend into dark mode
+        style.configure("SummaryLabel.TLabel", background="#1e1e1e", foreground="white")
+
+        # ✅ Override hover/background styling completely
+        style.map("TButton",
+                  background=[("active", "#3a3a3a"), ("!active", "#1e1e1e")],
+                  relief=[("active", "flat"), ("!active", "flat")])
+
+        # ✅ Remove gray box behind "ongoing" events
+        style.configure("Ongoing.TButton", foreground="red", background="#1e1e1e", relief="flat", borderwidth=0, highlightthickness=0, font=("Arial", 10, "bold"))
+        style.configure("Past.TButton", foreground="gray", background="#1e1e1e", relief="flat", borderwidth=0, highlightthickness=0)
+        style.configure("Future.TButton", foreground="white", background="#1e1e1e", relief="flat", borderwidth=0, highlightthickness=0)
+
+        # ✅ Force UI refresh to apply styles
+        root.update_idletasks()
+
     else:
         root.tk_setPalette(background="white", foreground="black")
-        style.configure("TFrame", background="white")
+        style.configure("TFrame", background="white", borderwidth=0, relief="flat")
+        style.configure("CustomFrame.TFrame", background="white", borderwidth=0, relief="flat")
         style.configure("TLabel", background="white", foreground="black")
-        style.configure("TButton", background="white", foreground="black")
-        style.configure("Past.TButton", foreground="gray")
-        style.configure("Ongoing.TButton", foreground="red")
-        style.configure("Future.TButton", foreground="black")
+        style.configure("SummaryLabel.TLabel", background="white", foreground="black")
 
-    # Refresh UI
+        style.configure("TButton",
+                        background="white",
+                        foreground="black",
+                        relief="flat",
+                        borderwidth=0,
+                        highlightthickness=0,
+                        padding=5)
+
+        style.map("TButton",
+                  background=[("active", "#e0e0e0"), ("!active", "white")],
+                  relief=[("active", "flat"), ("!active", "flat")])
+
+        style.configure("Past.TButton", foreground="gray", background="white", relief="flat", borderwidth=0, highlightthickness=0)
+        style.configure("Ongoing.TButton", foreground="red", background="white", relief="flat", borderwidth=0, highlightthickness=0, font=("Arial", 10, "bold"))
+        style.configure("Future.TButton", foreground="black", background="white", relief="flat", borderwidth=0, highlightthickness=0)
+
+        root.update_idletasks()
+
     update_schedule()
 
 # Function to allow dragging the window smoothly from anywhere
@@ -301,7 +348,11 @@ def create_dropdown_header(current_day):
         
         # Dark Mode Toggle Button
         global dark_mode_button
-        dark_mode_button = ttk.Button(header_frame, text="🌙 Dark Mode", command=lambda: toggle_dark_mode(header_frame))
+        dark_mode_button = ttk.Button(
+            header_frame,
+            text="🌙 Dark Mode",
+            command=lambda: toggle_dark_mode(header_frame, day_dropdown.get())
+        )
         dark_mode_button.pack(side="right", padx=initial_button_pos+15)     
 
 def open_edit_dialog(day, start_time, end_time, activity):
@@ -378,15 +429,15 @@ def update_schedule(selected_day=None):
     style.configure("Ongoing.TButton", foreground="red", font=("Arial", 10, "bold"))  # Bold text for ongoing
     style.configure("Future.TButton", foreground="black")
 
-    # Separate background styles to make ongoing events stand out
-    style.configure("OngoingFrame.TFrame", background="#ffe6e6")  # Light red background for ongoing
-    style.configure("DefaultFrame.TFrame", background="#f0f0f0")  # Alternating background
-    
     today = datetime.datetime.today().strftime("%A")
+    now = datetime.datetime.now().strftime("%I:%M %p")  # Current time for debugging
 
-    # Preserve user-selected day instead of resetting to today
+    print(f"🔍 Debug: Current time = {now}, Selected day = {selected_day}, Today = {today}")
+
     if selected_day is None:
-        selected_day = day_dropdown.get() if 'day_dropdown' in globals() else datetime.datetime.today().strftime("%A")
+        selected_day = day_dropdown.get() if 'day_dropdown' in globals() else today
+
+    print(f"🔍 Debug: Final selected day after processing = {selected_day}")
 
     full_schedule = scheduler.load_schedule()
     today_schedule = full_schedule.get(selected_day, [])
@@ -432,25 +483,15 @@ def update_schedule(selected_day=None):
         # Get today's name
         today = datetime.datetime.today().strftime("%A")
 
-        # If the selected day is NOT today, everything is gray
-        # Define background colors for better contrast
-        bg_color = "#f0f0f0" if i % 2 == 0 else "#ffffff"  # Alternating row colors
-
         if selected_day != today:
-            edit_button.configure(style="Past.TButton")  # Everything gray
-            frame_style = f"CustomFrame{bg_color.replace('#', '')}.TFrame"
-            style = ttk.Style()
-            style.configure(frame_style, background=bg_color)
-            frame.configure(style=frame_style)            
+            edit_button.configure(style="Past.TButton")  # Everything gray    
         else:
             if status == "past":
                 edit_button.configure(style="Past.TButton")  # Past = Gray
             elif status == "ongoing":
                 edit_button.configure(style="Ongoing.TButton")  # Ongoing = Red                
-                frame.configure(style="OngoingFrame.TFrame")  # Apply light red background
             else:
                 edit_button.configure(style="Future.TButton")  # Future = Black
-                frame.configure(style="DefaultFrame.TFrame")  # Apply normal background
 
     # Add weekly summary
     display_weekly_summary()
@@ -489,7 +530,11 @@ def display_weekly_summary():
 
 # Function to scroll using the mouse wheel
 def on_mouse_scroll(event):
-    canvas.yview_scroll(-1 * (event.delta // 120), "units")
+    """Enables smooth scrolling for Windows, macOS, and Linux."""
+    if event.num == 4 or event.delta > 0:  # Linux scroll up OR Windows/macOS scroll up
+        canvas.yview_scroll(-1, "units")
+    elif event.num == 5 or event.delta < 0:  # Linux scroll down OR Windows/macOS scroll down
+        canvas.yview_scroll(1, "units")
 
 # Load schedule from scheduler.py
 def load_schedule():
@@ -523,9 +568,10 @@ canvas.create_window((0, 0), window=frame_inner, anchor="nw")
 frame_inner.bind("<Configure>", lambda event: canvas.configure(scrollregion=canvas.bbox("all")))
 canvas.configure(yscrollcommand=scrollbar.set)
 
-canvas.bind("<MouseWheel>", on_mouse_scroll)
-canvas.bind("<Button-4>", lambda event: canvas.yview_scroll(-1, "units"))
-canvas.bind("<Button-5>", lambda event: canvas.yview_scroll(1, "units"))
+# ✅ Ensure canvas properly supports scrolling
+canvas.bind_all("<MouseWheel>", on_mouse_scroll)  # Windows/macOS
+canvas.bind_all("<Button-4>", lambda event: canvas.yview_scroll(-1, "units"))  # Linux scroll up
+canvas.bind_all("<Button-5>", lambda event: canvas.yview_scroll(1, "units"))  # Linux scroll down
 
 update_schedule()
 
