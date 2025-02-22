@@ -18,7 +18,8 @@ import os
 
 # Constants
 TOTAL_HOURS = 24
-filename = "winter2025.json"
+scheduler_dir = "/mnt/d/papatrott/Documents/Programs/scheduler"
+filename = f"{scheduler_dir}/winter2025.json"
 
 def load_aliases():
     """Loads alias mappings from config.json."""
@@ -72,7 +73,7 @@ def sort_schedule(schedule):
 
 def backup_schedule():
     """Creates a timestamped backup of winter2025.json and maintains a history."""
-    backup_dir = "backups"
+    backup_dir = f"{scheduler_dir}/backups"
     os.makedirs(backup_dir, exist_ok=True)  # Ensure backup directory exists
 
     # Create a timestamped backup filename
