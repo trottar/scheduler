@@ -21,6 +21,8 @@ import os
 import atexit
 import re
 import shutil
+import platform
+import webbrowser
 
 LOCK_FILE = "schedule_gui.lock"
 days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -178,6 +180,15 @@ def get_event_status(start_time, end_time, selected_day):
     elif start_dt <= now <= (end_dt if end_dt else start_dt):
         return "ongoing"
     return "future"
+
+def open_google_calendar():
+    """Opens Google Calendar in the default Windows browser when running inside WSL."""
+    url = "https://calendar.google.com"
+
+    if "microsoft-standard-WSL" in platform.uname().release:
+        os.system(f'cmd.exe /C start {url}')  # Faster than PowerShell
+    else:
+        webbrowser.open(url)
 
 def validate_time_format(time_str):
     time_pattern = r"^(0?[1-9]|1[0-2]):[0-5][0-9] (AM|PM)$"
@@ -495,13 +506,30 @@ def update_schedule(selected_day=None):
         frame = ttk.Frame(frame_inner, padding=(10, 5))
         frame.pack(fill="x", padx=15, pady=2)
 
+        time_label = ttk.Label(
+            frame,
+            text=f"{start_time} - {end_time}",
+            font=("Arial", 15, "bold"),
+            anchor="w",
+            width=25  # Ensures equal spacing for all times
+        )
+        time_label.pack(side="left", padx=(15, 15))  # Extra space between time and event name
+
+        activity_label = ttk.Label(
+            frame,
+            text=activity,
+            font=("Arial", 12),
+            anchor="w"
+        )
+        activity_label.pack(side="left", fill="x", expand=True, padx=(0, 10))  # Slight right padding
+
         edit_button = ttk.Button(
             frame,
-            text=event_text,
-            command=lambda s=selected_day, st=start_time, et=end_time, a=activity: open_edit_dialog(s, st, et, a),
-            style="TButton"
+            text="✏",
+            width=3,
+            command=lambda s=selected_day, st=start_time, et=end_time, a=activity: open_edit_dialog(s, st, et, a)
         )
-        edit_button.pack(side="left", fill="x", expand=True)
+        edit_button.pack(side="right", padx=10)
                 
         # Get today's name
         today = datetime.datetime.today().strftime("%A")
@@ -509,12 +537,25 @@ def update_schedule(selected_day=None):
         if selected_day != today:
             edit_button.configure(style="Past.TButton")  # Everything gray    
         else:
-            if status == "past":
-                edit_button.configure(style="Past.TButton")  # Past = Gray
+            if selected_day != today:
+                time_label.configure(foreground="gray")
+                activity_label.configure(foreground="gray")
+            elif status == "past":
+                time_label.configure(foreground="gray")
+                activity_label.configure(foreground="gray")
             elif status == "ongoing":
-                edit_button.configure(style="Ongoing.TButton")  # Ongoing = Red                
+                time_label.configure(foreground="red")
+                activity_label.configure(foreground="red")
             else:
-                edit_button.configure(style="Future.TButton")  # Future = Black
+                time_label.configure(foreground="black")
+                activity_label.configure(foreground="black")
+
+    calendar_button = ttk.Button(
+        frame_inner,
+        text="📅 Open Google Calendar",
+        command=open_google_calendar
+    )
+    calendar_button.pack(pady=(10, 5))  # Adds space between the schedule and summary
 
     # Add weekly summary
     display_weekly_summary()
