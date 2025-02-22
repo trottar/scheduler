@@ -193,13 +193,27 @@ def undo_last_change():
     latest_backup = os.path.join(backup_dir, existing_backups[0])
     original_file = "winter2025.json"
 
-    confirm = messagebox.askyesno("Undo Changes", f"Are you sure you want to undo using {latest_backup}?")
+    # Extract the timestamp from the filename
+    try:
+        timestamp_str = existing_backups[0].split('_')[-1].split('.')[0]
+        backup_datetime = datetime.datetime.strptime(timestamp_str, "%Y%m%d%H%M%S")
+        formatted_datetime = backup_datetime.strftime("%A, %B %d, %Y at %I:%M:%S %p")
+    except ValueError:
+        formatted_datetime = "an unknown date"
+
+    confirm = messagebox.askyesno(
+        "Undo Changes",
+        f"Are you sure you want to revert to the backup from {formatted_datetime}?"
+    )
     if confirm:
         try:
             shutil.copyfile(latest_backup, original_file)
             os.remove(latest_backup)  # Remove used backup
             print(f"✅ Undo successful! Reverted to {latest_backup}")
-            update_schedule()  # Refresh the GUI
+
+            # Refresh the GUI to reflect the restored schedule
+            update_schedule()
+
         except Exception as e:
             print(f"⚠ Undo failed: {e}")
             
@@ -293,74 +307,17 @@ def create_dropdown_header(current_day):
         dark_mode_button = ttk.Button(header_frame, text="🌙 Dark Mode", command=lambda: toggle_dark_mode(header_frame))
         dark_mode_button.pack(side="right", padx=initial_button_pos+15)     
 
-def delete_event(day, start):
-    """Deletes an event and adjusts times correctly while preserving first/last event logic."""
-    
-    filename = "winter2025.json"
-
-    # Load current schedule
-    with open(filename, "r") as file:
-        schedule = json.load(file)
-
-    # Map MW and TTh days correctly
-    alias_map = {
-        "Monday": "MW", "Wednesday": "MW",
-        "Tuesday": "TTh", "Thursday": "TTh"
-    }
-    actual_day = alias_map.get(day, day)  # Redirect edits if needed
-
-    if actual_day not in schedule:
-        print(f"⚠ No schedule found for {day} ({actual_day}).")
-        return
-
-    events = schedule[actual_day]
-
-    # Find and remove the event
-    deleted_event = None
-    for i, entry in enumerate(events):
-        event_start = entry[0].split(" - ")[0].strip()
-
-        if start.strip() == event_start:
-            deleted_event = events.pop(i)  # Remove the event
-            print(f"🗑 Deleted event: {deleted_event}")
-            break
-    else:
-        print(f"⚠ No matching event found for {start} on {day} ({actual_day}). No changes made.")
-        return
-
-    # If there's a next event, adjust its start time
-    if i < len(events):
-        next_event = events[i]
-        next_start = next_event[0].split(" - ")[0].strip()
-
-        if start != next_start:  # Ensure valid update
-            events[i][0] = f"{start} - {next_event[0].split(' - ')[1]}"
-
-    # If there's a previous event, extend its end time to match the deleted event’s start time
-    if i > 0:
-        prev_event = events[i - 1]
-        prev_start = prev_event[0].split(" - ")[0].strip()
-
-        if prev_start != start:  # Ensure valid update
-            prev_end = start  # Extend previous event to fill the gap
-            events[i - 1][0] = f"{prev_start} - {prev_end}"
-
-    # Ensure "Bedtime" remains dynamically handled by GUI
-    if events and events[-1][1].lower() == "bedtime":
-        last_start = events[-1][0].split(" - ")[0].strip()
-        events[-1] = [last_start, "Bedtime"]  # Preserve Bedtime format
-
-    # Save the modified schedule back to JSON
-    schedule[actual_day] = events
-    with open(filename, "w") as file:
-        json.dump(schedule, file, indent=4)
-
-    print(f"✅ Deleted event on {actual_day} and adjusted times correctly.")
-
-    # Refresh GUI
-    update_schedule(day)
-
 def open_edit_dialog(day, start_time, end_time, activity):
+	
+    aliases = scheduler.load_aliases()  # Load alias mappings
+
+    # Resolve alias dynamically
+    actual_day = day
+    for alias, mapped_days in aliases.items():
+        if day in mapped_days:
+            actual_day = alias
+            break  # Stop checking once an alias is found
+			
     edit_window = tk.Toplevel(header_frame)
     edit_window.title("Edit Event")
     edit_window.geometry("300x200")
@@ -396,7 +353,7 @@ def open_edit_dialog(day, start_time, end_time, activity):
         """Deletes the event after confirmation."""
         confirm = messagebox.askyesno("Delete Event", "Are you sure you want to delete this event?")
         if confirm:
-            delete_event(day, start_time)  # Use start_time instead of old_start
+            scheduler.delete_event(day, start_time)  # Use start_time instead of old_start
             edit_window.destroy()
             update_schedule(day)  # Refresh GUI
 
@@ -427,7 +384,6 @@ def update_schedule(selected_day=None):
     # Separate background styles to make ongoing events stand out
     style.configure("OngoingFrame.TFrame", background="#ffe6e6")  # Light red background for ongoing
     style.configure("DefaultFrame.TFrame", background="#f0f0f0")  # Alternating background
-
     
     today = datetime.datetime.today().strftime("%A")
 

@@ -19,21 +19,44 @@ import os
 # Constants
 TOTAL_HOURS = 24
 
+def load_aliases():
+    """Loads alias mappings from config.json."""
+    try:
+        with open("config.json", "r") as file:
+            config = json.load(file)
+            return config.get("aliases", {})  # Default to empty if missing
+    except FileNotFoundError:
+        return {}  # Safe fallback if config.json is missing
+
 # Load the schedule from the JSON file
 def load_schedule(filename="winter2025.json"):
     """Loads the schedule and ensures it is sorted with 5:00 AM as the new day start."""
     with open(filename, "r") as file:
         schedule = json.load(file)
-    
-    expanded_schedule = expand_schedule(schedule)  # Keep MW/TTh logic intact
-    return sort_schedule(expanded_schedule)  # Apply sorting without breaking aliasing
+
+    aliases = load_aliases()  # Load dynamic alias mappings
+    expanded_schedule = expand_schedule(schedule)
+
+    # Ensure alias-mapped days retrieve the correct schedule dynamically
+    final_schedule = {}
+    for day, tasks in expanded_schedule.items():
+        actual_day = day
+        for alias, mapped_days in aliases.items():
+            if day in mapped_days:
+                actual_day = alias
+                break
+        final_schedule[day] = expanded_schedule.get(actual_day, tasks)
+
+    return sort_schedule(final_schedule)  # Apply sorting
 
 def sort_schedule(schedule):
     """Sorts each day's events chronologically, treating 5:00 AM as the new day start."""
     time_format = "%I:%M %p"
     
+    aliases = load_aliases()  # Load dynamic alias mappings
+
     for day in schedule:
-        if not isinstance(schedule[day], list):  # Skip MW/TTh aliasing keys
+        if day in aliases:  # Skip alias template days dynamically
             continue
         
         def event_key(event):
@@ -51,20 +74,13 @@ def sort_schedule(schedule):
     return schedule
 
 def backup_schedule():
-    """Creates a backup of winter2025.json before making changes and maintains multiple versions."""
+    """Creates a timestamped backup of winter2025.json and maintains a history."""
     backup_dir = "backups"
     os.makedirs(backup_dir, exist_ok=True)  # Ensure backup directory exists
 
-    # Limit backup history to the last 5 versions
-    existing_backups = sorted(
-        [f for f in os.listdir(backup_dir) if f.startswith("winter2025_backup")],
-        reverse=True
-    )
-    
-    if len(existing_backups) >= 5:
-        os.remove(os.path.join(backup_dir, existing_backups[-1]))  # Remove oldest backup
-
-    backup_file = os.path.join(backup_dir, f"winter2025_backup_{len(existing_backups)+1}.json")
+    # Create a timestamped backup filename
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    backup_file = os.path.join(backup_dir, f"winter2025_backup_{timestamp}.json")
     original_file = "winter2025.json"
 
     try:
@@ -73,33 +89,45 @@ def backup_schedule():
     except Exception as e:
         print(f"⚠ Failed to create backup: {e}")
 
+    # Maintain only the latest 5 backups
+    existing_backups = sorted(
+        [f for f in os.listdir(backup_dir) if f.startswith("winter2025_backup")],
+        reverse=True
+    )
+    if len(existing_backups) > 5:
+        for old_backup in existing_backups[5:]:
+            os.remove(os.path.join(backup_dir, old_backup))
+            
 # Call this at the start of update_json_schedule()
 backup_schedule()
 
 def update_json_schedule(day, old_start, new_start, new_end, new_activity):
     """Updates an event while ensuring overlaps are resolved and sorting is applied."""
+    
+    backup_schedule()  # Create a backup before making changes
+    
     filename = "winter2025.json"
 
     # Load current schedule
     with open(filename, "r") as file:
         schedule = json.load(file)
 
-    # Resolve MW/TTh aliasing
-    if day in ["Monday", "Wednesday"]:
-        actual_day = "MW"
-    elif day in ["Tuesday", "Thursday"]:
-        actual_day = "TTh"
-    else:
-        actual_day = day  # Keep the day unchanged if it's not aliased
+    aliases = load_aliases()  # Load aliases dynamically
+
+    # Resolve MW/TTh aliasing dynamically
+    actual_day = day
+    for alias, mapped_days in aliases.items():
+        if day in mapped_days:
+            actual_day = alias
+            break  # Stop checking once an alias is found
 
     # Expand MW/TTh before modifying
     expanded_schedule = expand_schedule(schedule)
 
-    # Ensure MW/TTh templates remain accessible
-    if "MW" in schedule and "MW" not in expanded_schedule:
-        expanded_schedule["MW"] = schedule["MW"]
-    if "TTh" in schedule and "TTh" not in expanded_schedule:
-        expanded_schedule["TTh"] = schedule["TTh"]
+    # Ensure alias templates remain accessible dynamically
+    for alias in aliases:
+        if alias in schedule and alias not in expanded_schedule:
+            expanded_schedule[alias] = schedule[alias]
 
     # Ensure day exists
     if actual_day not in expanded_schedule:
@@ -133,6 +161,11 @@ def update_json_schedule(day, old_start, new_start, new_end, new_activity):
     # **Step 5: Ensure sorting is applied after modifications**
     expanded_schedule[actual_day] = sort_schedule({actual_day: events})[actual_day]
 
+    # Restore MW/TTh placeholders after modification
+    for alias, mapped_days in aliases.items():
+        if all(day in expanded_schedule for day in mapped_days):
+            schedule[alias] = expanded_schedule[mapped_days[0]]  # Assign first day's events to alias
+
     # Save the modified schedule back to JSON
     schedule[actual_day] = expanded_schedule[actual_day]
     with open(filename, "w") as file:
@@ -140,33 +173,32 @@ def update_json_schedule(day, old_start, new_start, new_end, new_activity):
 
     print(f"✅ Updated event on {actual_day}, adjusted overlaps correctly, and ensured correct ordering.")
 
-def add_event_to_json(day, new_start, new_end, new_activity):
+def add_event_to_json(day, new_start, new_end, new_activity):   
     """Adds a new event while ensuring correct MW/TTh aliasing, conflict resolution, and sorting."""
-    filename = "winter2025.json"
+    
+    backup_schedule()  # Create a backup before making changes
 
-    # Backup before making changes
-    backup_schedule()
+    filename = "winter2025.json"
 
     # Load current schedule
     with open(filename, "r") as file:
         schedule = json.load(file)
 
-    # Resolve MW/TTh aliasing
-    if day in ["Monday", "Wednesday"]:
-        actual_day = "MW"
-    elif day in ["Tuesday", "Thursday"]:
-        actual_day = "TTh"
-    else:
-        actual_day = day
+    aliases = load_aliases()  # Load aliases dynamically
+
+    actual_day = day
+    for alias, mapped_days in aliases.items():
+        if day in mapped_days:
+            actual_day = alias
+            break
 
     # Expand schedule before modifying
     expanded_schedule = expand_schedule(schedule)
 
-    # Ensure MW/TTh templates remain accessible
-    if "MW" in schedule and "MW" not in expanded_schedule:
-        expanded_schedule["MW"] = schedule["MW"]
-    if "TTh" in schedule and "TTh" not in expanded_schedule:
-        expanded_schedule["TTh"] = schedule["TTh"]
+    # Ensure alias templates remain accessible dynamically
+    for alias in aliases:
+        if alias in schedule and alias not in expanded_schedule:
+            expanded_schedule[alias] = schedule[alias]
 
     # Ensure day exists
     if actual_day not in expanded_schedule:
@@ -183,6 +215,11 @@ def add_event_to_json(day, new_start, new_end, new_activity):
     # **Sort and finalize the schedule**
     expanded_schedule[actual_day] = sort_schedule({actual_day: expanded_schedule[actual_day]})[actual_day]
 
+    # Restore MW/TTh placeholders after modification
+    for alias, mapped_days in aliases.items():
+        if all(day in expanded_schedule for day in mapped_days):
+            schedule[alias] = expanded_schedule[mapped_days[0]]  # Assign first day's events to alias
+
     # Save back to JSON
     schedule[actual_day] = expanded_schedule[actual_day]
     with open(filename, "w") as file:
@@ -190,9 +227,84 @@ def add_event_to_json(day, new_start, new_end, new_activity):
 
     print(f"✅ Added new event to {actual_day}: {new_start} - {new_end}, {new_activity}")
 
+def delete_event(day, start):
+    """Deletes an event and adjusts times correctly while preserving first/last event logic."""
+    
+    backup_schedule()  # Create a backup before making changes
+    
+    filename = "winter2025.json"
+
+    # Load current schedule
+    with open(filename, "r") as file:
+        schedule = json.load(file)
+
+    # Map MW and TTh days correctly
+    alias_map = {
+        "Monday": "MW", "Wednesday": "MW",
+        "Tuesday": "TTh", "Thursday": "TTh"
+    }
+    actual_day = alias_map.get(day, day)  # Redirect edits if needed
+
+    if actual_day not in schedule:
+        print(f"⚠ No schedule found for {day} ({actual_day}).")
+        return
+
+    events = schedule[actual_day]
+
+    # Find and remove the event
+    deleted_event = None
+    for i, entry in enumerate(events):
+        event_start = entry[0].split(" - ")[0].strip()
+
+        if start.strip() == event_start:
+            deleted_event = events.pop(i)  # Remove the event
+            print(f"🗑 Deleted event: {deleted_event}")
+            break
+    else:
+        print(f"⚠ No matching event found for {start} on {day} ({actual_day}). No changes made.")
+        return
+
+    # If there's a next event, adjust its start time
+    if i < len(events):
+        next_event = events[i]
+        next_start = next_event[0].split(" - ")[0].strip()
+
+        if start != next_start:  # Ensure valid update
+            events[i][0] = f"{start} - {next_event[0].split(' - ')[1]}"
+
+    # If there's a previous event, extend its end time to match the deleted event’s start time
+    if i > 0:
+        prev_event = events[i - 1]
+        prev_start = prev_event[0].split(" - ")[0].strip()
+
+        if prev_start != start:  # Ensure valid update
+            prev_end = start  # Extend previous event to fill the gap
+            events[i - 1][0] = f"{prev_start} - {prev_end}"
+
+    # Ensure "Bedtime" remains dynamically handled by GUI
+    if events and events[-1][1].lower() == "bedtime":
+        last_start = events[-1][0].split(" - ")[0].strip()
+        events[-1] = [last_start, "Bedtime"]  # Preserve Bedtime format
+
+    # Save the modified schedule back to JSON
+    schedule[actual_day] = events
+    with open(filename, "w") as file:
+        json.dump(schedule, file, indent=4)
+
+    print(f"✅ Deleted event on {actual_day} and adjusted times correctly.")
+
 def check_for_overlap(day, start, end, schedule):
     """Removes fully overlapped events, pushes forward future events, and shortens past events."""
 
+    aliases = load_aliases()  # Load dynamic alias mappings
+
+    # Dynamically resolve the alias for the selected day
+    actual_day = day
+    for alias, mapped_days in aliases.items():
+        if day in mapped_days:
+            actual_day = alias
+            break  # Stop checking once an alias is found
+            
     time_format = "%I:%M %p"
     start_dt = datetime.datetime.strptime(start, time_format)
     end_dt = datetime.datetime.strptime(end, time_format)
@@ -251,21 +363,28 @@ def expand_schedule(schedule):
     """Expands MW and TTh placeholders to actual schedules, handling missing templates safely."""
     expanded_schedule = {}
 
-    # Provide safe fallbacks in case MW/TTh do not exist in JSON
-    mw_template = schedule.get("MW", [])
-    tth_template = schedule.get("TTh", [])
+    aliases = load_aliases()  # Load aliases dynamically
 
-    # Iterate over the schedule, replacing template placeholders
+    # Initialize template storage dynamically
+    templates = {alias: schedule.get(alias, []) for alias in aliases}
+
+    # Dynamically expand alias-based schedules instead of hardcoding MW/TTh
     for day, tasks in schedule.items():
-        if day in ["MW", "TTh"]:
-            continue  # Skip template days themselves
+        if day in aliases:  # Skip alias template days themselves
+            continue
 
-        if tasks == "MW":
-            expanded_schedule[day] = list(mw_template)  # Ensure it's a new copy, not a reference
-        elif tasks == "TTh":
-            expanded_schedule[day] = list(tth_template)  # Avoid modifying the template itself
+        # Dynamically replace mapped days with their alias data
+        for alias, mapped_days in aliases.items():
+            if tasks == alias:
+                expanded_schedule[day] = list(schedule.get(alias, []))  # Ensure a deep copy
+                break
         else:
-            expanded_schedule[day] = tasks  # Keep regular days unchanged
+            expanded_schedule[day] = tasks  # Keep normal days unchanged
+
+    # Preserve alias templates after modification
+    for alias, mapped_days in aliases.items():
+        if all(day in expanded_schedule for day in mapped_days):
+            schedule[alias] = expanded_schedule[mapped_days[0]]  # Assign first mapped day's events to alias
 
     return expanded_schedule
 
@@ -284,12 +403,27 @@ def calculate_duration(start, end):
 
 # Function to adjust schedule by calculating missing end times and handling overnight durations
 def adjust_schedule(schedule):
+    aliases = load_aliases()  # Load alias mappings
     days = list(schedule.keys())  # Ordered list of days
     adjusted_schedule = {}
 
     for i, day in enumerate(days):
-        day_schedule = schedule[day]
-        next_day = days[(i + 1) % len(days)]  # Get next day in cycle
+        # Dynamically resolve alias
+        actual_day = day
+        for alias, mapped_days in aliases.items():
+            if day in mapped_days:
+                actual_day = alias
+                break
+
+        day_schedule = schedule.get(actual_day, [])
+        next_day_index = (i + 1) % len(days)
+        next_day = days[next_day_index]
+
+        # Resolve alias for the next day
+        for alias, mapped_days in aliases.items():
+            if next_day in mapped_days:
+                next_day = alias
+                break
 
         adjusted_day_schedule = []
         for j, entry in enumerate(day_schedule):
@@ -300,7 +434,7 @@ def adjust_schedule(schedule):
                 duration = calculate_duration(start_time, end_time[0])
             else:
                 # If no end time, find the first start time of the next day
-                if schedule[next_day]:
+                if schedule.get(next_day):
                     next_day_start = schedule[next_day][0][0].split('-')[0].strip()
                     duration = calculate_duration(start_time, next_day_start)
                 else:
@@ -308,37 +442,61 @@ def adjust_schedule(schedule):
 
             adjusted_day_schedule.append((start_time, end_time[0] if end_time else None, activity, duration))
 
-        adjusted_schedule[day] = adjusted_day_schedule
+        adjusted_schedule[actual_day] = adjusted_day_schedule
 
     return adjusted_schedule
 
 # Function to calculate free time per day
 def calculate_hours(schedule):
-    total_allocated = sum([entry[3] for entry in schedule])
+    aliases = load_aliases()  # Load dynamic alias mappings
+
+    total_allocated = 0
+
+    for day, events in schedule.items():
+        # Skip alias template days dynamically
+        if day in aliases:
+            continue
+        
+        total_allocated += sum([entry[3] for entry in events])
+
     free_time = TOTAL_HOURS - total_allocated
     return free_time
 
 # Function to print today's schedule
 def print_today_schedule(schedule):
     today = datetime.datetime.today().strftime("%A")
-    today_schedule = schedule.get(today, [])
+    aliases = load_aliases()  # Load alias mappings
 
-    print(f"\n📅 **Hourly Schedule for {today}** 📅")
+    # Dynamically resolve alias for today
+    actual_day = today
+    for alias, mapped_days in aliases.items():
+        if today in mapped_days:
+            actual_day = alias
+            break  # Stop checking once an alias is found
+
+    today_schedule = schedule.get(actual_day, [])
+
+    print(f"\n📅 **Hourly Schedule for {today} ({actual_day})** 📅")
     print("-" * 50)
     for start, end, activity, duration in today_schedule:
         end_str = f"- {end}" if end else ""
         print(f"{start} {end_str}: {activity} ({duration:.2f} hours)")
     print("-" * 50)
 
-    free_time = calculate_hours(today_schedule)
+    free_time = calculate_hours({actual_day: today_schedule})
     print(f"✅ Total Allocated Time: {TOTAL_HOURS - free_time:.2f} / {TOTAL_HOURS} hours")
     print(f"🕒 Free Time Left: {free_time:.2f} hours\n")
 
 # Function to summarize total weekly hours per activity
 def get_weekly_summary(schedule):
+    aliases = load_aliases()  # Load dynamic alias mappings
     category_totals = {}
 
-    for day_schedule in schedule.values():
+    for day, day_schedule in schedule.items():
+        # Skip alias template days dynamically
+        if day in aliases:
+            continue
+
         for _, _, activity, duration in day_schedule:
             category_totals[activity] = category_totals.get(activity, 0) + duration
 
