@@ -454,23 +454,23 @@ def adjust_schedule(schedule):
                 continue  
 
             # ✅ If the event is "Bedtime," dynamically assign an end time
-			if activity.lower() == "bedtime":
-				next_day_start = get_next_day_start_time(schedule, day)
+            if activity.lower() == "bedtime":
+                next_day_start = get_next_day_start_time(schedule, day)
 
-				# Determine the fallback dynamically by checking the earliest event across the week
-				all_start_times = []
-				for d, events in schedule.items():
-					if events:
-						first_event_time = events[0][0].split(" - ")[0].strip()
-						all_start_times.append(datetime.datetime.strptime(first_event_time, "%I:%M %p"))
+                # Determine the fallback dynamically by checking the earliest event across the week
+                all_start_times = []
+                for d, events in schedule.items():
+                    if events:
+                        first_event_time = events[0][0].split(" - ")[0].strip()
+                        all_start_times.append(datetime.datetime.strptime(first_event_time, "%I:%M %p"))
 
-				# Determine the fallback as the earliest start time found (default to 5:00 AM if none)
-				fallback_time = min(all_start_times).strftime("%I:%M %p") if all_start_times else "5:00 AM"
+                # Determine the fallback as the earliest start time found (default to 5:00 AM if none)
+                fallback_time = min(all_start_times).strftime("%I:%M %p") if all_start_times else "5:00 AM"
 
-				# Use next day's first event if available; otherwise, use dynamically determined fallback
-				end_time = next_day_start if next_day_start else fallback_time
+                # Use next day's first event if available; otherwise, use dynamically determined fallback
+                end_time = next_day_start if next_day_start else fallback_time
 
-				print(f"✅ Adjusted 'Bedtime' on {day}: {start_time} - {end_time}")
+                print(f"✅ Adjusted 'Bedtime' on {day}: {start_time} - {end_time}")
             
             else:
                 # If no end time, default to 1 hour after start
