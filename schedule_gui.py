@@ -186,7 +186,7 @@ def validate_time_format(time_str):
 def calculate_duration(start, end=None):
     time_format = "%I:%M %p"
 
-    #print(f"🔍 Debug: Received start='{start}', end='{end}'")  # Debugging output
+    ##print(f"🔍 Debug: Received start='{start}', end='{end}'")  # Debugging output
 
     # If end time is missing or invalid, return 0.0 instead of breaking
     if not end or end.strip() == "" or end == "DYNAMIC" or len(end) < 4:
@@ -432,14 +432,17 @@ def update_schedule(selected_day=None):
     today = datetime.datetime.today().strftime("%A")
     now = datetime.datetime.now().strftime("%I:%M %p")  # Current time for debugging
 
-    print(f"🔍 Debug: Current time = {now}, Selected day = {selected_day}, Today = {today}")
+    #print(f"🔍 Debug: Current time = {now}, Selected day = {selected_day}, Today = {today}")
 
     if selected_day is None:
         selected_day = day_dropdown.get() if 'day_dropdown' in globals() else today
 
-    print(f"🔍 Debug: Final selected day after processing = {selected_day}")
+    #print(f"🔍 Debug: Final selected day after processing = {selected_day}")
 
     full_schedule = scheduler.load_schedule()
+    # ✅ Call adjust_schedule() to fix Bedtime before using full_schedule
+    full_schedule = scheduler.adjust_schedule(full_schedule)
+    
     today_schedule = full_schedule.get(selected_day, [])
 
     # Prevent duplicate updates by first clearing any scheduled future calls
@@ -456,22 +459,30 @@ def update_schedule(selected_day=None):
         if len(entry) < 2:
             continue
 
-        time_range, activity = entry[:2]
-        start_time, *end_time = map(str.strip, time_range.split('-'))
-        end_time = end_time[0] if end_time and end_time[0].strip() else ""
+        # ✅ Support both formats: (["8:15 AM - 9:00 AM", "Wake up, breakfast, coffee"]) or ("8:15 AM", "9:00 AM", "Wake up, breakfast, coffee")
+        if isinstance(entry, list) and len(entry) == 2:
+            time_range, activity = entry
+            start_time, *end_time = map(str.strip, time_range.split('-'))
+            end_time = end_time[0] if end_time and end_time[0].strip() else ""
+        elif isinstance(entry, tuple) and len(entry) == 3:
+            start_time, end_time, activity = entry  # ✅ Correctly extract values from new format
+        else:
+            print(f"⚠ Invalid event format: {entry}")
+            continue  # Skip invalid entries
+
+        # ✅ Debugging: Print extracted times
+        print(f"🖥 GUI Processing: {start_time} - {end_time} ({activity})")
 
         duration = calculate_duration(start_time, end_time)
         status = get_event_status(start_time, end_time, selected_day)
 
-        # Improve text spacing & styling
+        # ✅ Keep GUI formatting unchanged
         time_text = f"{start_time} - {end_time}"
-        event_text = f"{time_text:<18} {activity} ({duration:.2f} hrs)"        
+        event_text = f"{time_text:<18} {activity} ({duration:.2f} hrs)"
 
-        # Create a frame to better align elements
         frame = ttk.Frame(frame_inner, padding=(10, 5))
         frame.pack(fill="x", padx=15, pady=2)
 
-        # Clickable edit button with improved text formatting
         edit_button = ttk.Button(
             frame,
             text=event_text,

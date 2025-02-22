@@ -68,10 +68,6 @@ def sort_schedule(schedule):
         # ✅ Sort strictly by start time
         schedule[day] = sorted(schedule[day], key=event_key)
 
-    print(f"\n🔍 Debugging Sort Order for {day}:")
-    for event in schedule[day]:
-        print(f" - {event[0]} {event[1]}")
-
     return schedule
 
 def backup_schedule():
@@ -101,6 +97,25 @@ def backup_schedule():
             
 # Call this at the start of update_json_schedule()
 backup_schedule()
+
+def get_next_day_start_time(schedule, current_day):
+    """Returns the first event start time of the next day, or None if no event exists."""    
+
+    days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+    if current_day not in days_of_week:
+        return None  # Safety check
+
+    next_day_index = (days_of_week.index(current_day) + 1) % len(days_of_week)  # Cycle to next day
+    next_day = days_of_week[next_day_index]
+
+    if next_day in schedule and schedule[next_day]:
+        first_event_start = schedule[next_day][0][0].split(" - ")[0]  # Extract start time
+        print(f"⏭ Next day's first event: {first_event_start} on {next_day}")
+        return first_event_start
+
+    print(f"⏭ No events found for {next_day}, returning None.")
+    return None  # No next-day event found
 
 def update_json_schedule(day, old_start, new_start, new_end, new_activity):
     """Updates an event while ensuring overlaps are resolved and sorting is applied."""
@@ -402,7 +417,6 @@ def adjust_schedule(schedule):
     adjusted_schedule = {}
 
     for i, day in enumerate(days):
-        # Dynamically resolve alias
         actual_day = day
         for alias, mapped_days in aliases.items():
             if day in mapped_days:
@@ -421,20 +435,34 @@ def adjust_schedule(schedule):
 
         adjusted_day_schedule = []
         for j, entry in enumerate(day_schedule):
-            time_range, activity = entry[:2]  # Extract time range and activity
+            time_range, activity = entry[:2]  
             start_time, *end_time = map(str.strip, time_range.split('-'))
 
-            if end_time:
-                duration = calculate_duration(start_time, end_time[0])
-            else:
-                # If no end time, find the first start time of the next day
-                if schedule.get(next_day):
-                    next_day_start = schedule[next_day][0][0].split('-')[0].strip()
-                    duration = calculate_duration(start_time, next_day_start)
-                else:
-                    duration = TOTAL_HOURS  # Assume max duration if next day is empty
+            # 🔍 Debug: Before modification
+            print(f"🔍 Checking event: {start_time} - {end_time if end_time else 'No End Time'} ({activity}) on {day}")
 
-            adjusted_day_schedule.append((start_time, end_time[0] if end_time else None, activity, duration))
+            # ✅ If event already has an end time, do nothing
+            if end_time:
+                adjusted_day_schedule.append((start_time, end_time[0], activity))
+                continue  
+
+            # ✅ If the event is "Bedtime," dynamically assign an end time
+            if activity.lower() == "bedtime":
+                next_day_start = get_next_day_start_time(schedule, day)
+                
+                if next_day_start:
+                    end_time = next_day_start  
+                else:
+                    end_time = "5:00 AM"  
+
+                print(f"✅ Adjusted 'Bedtime' on {day}: {start_time} - {end_time}")
+            
+            else:
+                # If no end time, default to 1 hour after start
+                end_time = (datetime.datetime.strptime(start_time, "%I:%M %p") + datetime.timedelta(hours=1)).strftime("%I:%M %p")
+                print(f"⏳ Defaulted missing end time: {start_time} - {end_time} for {activity}")
+
+            adjusted_day_schedule.append((start_time, end_time, activity))
 
         adjusted_schedule[actual_day] = adjusted_day_schedule
 
