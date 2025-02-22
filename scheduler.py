@@ -149,19 +149,20 @@ def update_json_schedule(day, old_start, new_start, new_end, new_activity):
         return
 
     events = expanded_schedule[actual_day]
+    
+    # ✅ Step 1: First, insert the new event with a temporary flag
+    temp_marker = "##TEMP##"
+    events.append([f"{new_start} - {new_end}", f"{new_activity} {temp_marker}"])
+    print(f"✔ Inserted temporary event: {new_start} - {new_end} ({new_activity})")
 
-    # **Step 1: Remove the old event before inserting the new one**
-    deleted_event = None
+    # ✅ Step 2: Run overlap detection, which will handle deletion
+    check_for_overlap(actual_day, new_start, new_end, expanded_schedule)
+
+    # ✅ Step 3: Remove the temporary marker to finalize insertion
     for i, entry in enumerate(events):
-        event_start = entry[0].split(" - ")[0].strip()
-
-        if old_start.strip() == event_start:
-            deleted_event = events.pop(i)  # Remove the event
-            print(f"🗑 Deleted event: {deleted_event}")
-            break
-    else:
-        print(f"⚠ No matching event found for {old_start} on {day} ({actual_day}). No changes made.")
-        return
+        if temp_marker in entry[1]:
+            events[i][1] = entry[1].replace(temp_marker, "").strip()
+            print(f"✅ Finalized event: {events[i][0]} {events[i][1]}")
 
     # **Step 2: Call `check_for_overlap()` BEFORE inserting the new event**
     check_for_overlap(actual_day, new_start, new_end, expanded_schedule)
@@ -279,13 +280,15 @@ def delete_event(day, start):
         print(f"⚠ No matching event found for {start} on {day} ({actual_day}). No changes made.")
         return
 
-    # If there's a next event, adjust its start time
-    if i < len(events):
+    # If there's a next event, adjust its start time safely
+    if i < len(events) - 1:  # ✅ Ensure there's another event after this one
         next_event = events[i]
         next_start = next_event[0].split(" - ")[0].strip()
 
-        if start != next_start:  # Ensure valid update
+        if start != next_start:  # ✅ Ensure valid update
             events[i][0] = f"{start} - {next_event[0].split(' - ')[1]}"
+    elif i == len(events) - 1:  # ✅ If this is the last event, do nothing
+        print(f"⚠ No valid next event after deleting {start}. Skipping adjustment.")
 
     # If there's a previous event, extend its end time to match the deleted event’s start time
     if i > 0:
@@ -317,6 +320,12 @@ def check_for_overlap(day, start, end, schedule):
     start_dt = datetime.datetime.strptime(start, time_format)
     end_dt = datetime.datetime.strptime(end, time_format)
 
+    # ✅ Handle cases where the event occurs after midnight but should belong to the same day
+    if start_dt.hour < 5:
+        start_dt += datetime.timedelta(days=1)  # Move it forward to stay in the correct logical day
+    if end_dt.hour < 5:
+        end_dt += datetime.timedelta(days=1)
+
     i = 0
     while i < len(schedule[day]):
         entry = schedule[day][i]
@@ -330,10 +339,16 @@ def check_for_overlap(day, start, end, schedule):
         entry_start_dt = datetime.datetime.strptime(entry_start.strip(), time_format)
         entry_end_dt = datetime.datetime.strptime(entry_end.strip(), time_format)
 
+        # ✅ Handle cases where the event occurs after midnight but belongs to the same logical day
+        if entry_start_dt.hour < 5:
+            entry_start_dt += datetime.timedelta(days=1)  # Move it forward to align with the correct day
+        if entry_end_dt.hour < 5:
+            entry_end_dt += datetime.timedelta(days=1)
+
         print(f"🔍 Checking: {entry_start} - {entry_end} ({entry[1]})")
 
         # **CASE 1: The new event fully overlaps an existing one → DELETE**
-        if start_dt <= entry_start_dt and end_dt >= entry_end_dt:
+        if start_dt <= entry_start_dt and end_dt >= entry_end_dt:            
             print(f"🗑 Removing '{entry[1]}' because it is fully within {start} - {end}.")
             del schedule[day][i]
             continue  # Skip incrementing i because we removed an entry
