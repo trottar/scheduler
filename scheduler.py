@@ -18,6 +18,7 @@ import os
 
 # Constants
 TOTAL_HOURS = 24
+filename = "winter2025.json"
 
 def load_aliases():
     """Loads alias mappings from config.json."""
@@ -104,9 +105,7 @@ backup_schedule()
 def update_json_schedule(day, old_start, new_start, new_end, new_activity):
     """Updates an event while ensuring overlaps are resolved and sorting is applied."""
     
-    backup_schedule()  # Create a backup before making changes
-    
-    filename = "winter2025.json"
+    backup_schedule()  # Create a backup before making changes       
 
     # Load current schedule
     with open(filename, "r") as file:
@@ -178,8 +177,6 @@ def add_event_to_json(day, new_start, new_end, new_activity):
     
     backup_schedule()  # Create a backup before making changes
 
-    filename = "winter2025.json"
-
     # Load current schedule
     with open(filename, "r") as file:
         schedule = json.load(file)
@@ -231,19 +228,17 @@ def delete_event(day, start):
     """Deletes an event and adjusts times correctly while preserving first/last event logic."""
     
     backup_schedule()  # Create a backup before making changes
-    
-    filename = "winter2025.json"
 
     # Load current schedule
     with open(filename, "r") as file:
         schedule = json.load(file)
 
-    # Map MW and TTh days correctly
-    alias_map = {
-        "Monday": "MW", "Wednesday": "MW",
-        "Tuesday": "TTh", "Thursday": "TTh"
-    }
-    actual_day = alias_map.get(day, day)  # Redirect edits if needed
+    aliases = load_aliases()
+    actual_day = day
+    for alias, mapped_days in aliases.items():
+        if day in mapped_days:
+            actual_day = alias
+            break  # Stop once an alias is found
 
     if actual_day not in schedule:
         print(f"⚠ No schedule found for {day} ({actual_day}).")

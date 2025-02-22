@@ -23,6 +23,7 @@ import re
 import shutil
 
 LOCK_FILE = "schedule_gui.lock"
+days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 # Function to check for an existing lock file (prevents multiple instances)
 def check_running_instance():
@@ -157,18 +158,15 @@ def calculate_duration(start, end=None):
     duration = (end_time - start_time).total_seconds() / 3600  # Convert to hours
     return round(duration, 2)
 
-days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
 # Function to find the first start time of the next day
 def get_next_day_start_time(schedule, current_day):
-    """Returns the first event start time of the next day, or None if no event exists."""
-    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    """Returns the first event start time of the next day, or None if no event exists."""    
 
-    if current_day not in days:
+    if current_day not in days_of_week:
         return None  # Safety check
 
-    next_day_index = (days.index(current_day) + 1) % len(days)  # Cycle to next day
-    next_day = days[next_day_index]
+    next_day_index = (days_of_week.index(current_day) + 1) % len(days_of_week)  # Cycle to next day
+    next_day = days_of_week[next_day_index]
 
     if next_day in schedule and schedule[next_day]:
         first_event_start = schedule[next_day][0][0].split(" - ")[0]  # Extract start time
@@ -262,8 +260,7 @@ def open_add_event_dialog(selected_day):
     ttk.Button(add_window, text="Cancel", command=add_window.destroy).pack(pady=5)
 
 def create_dropdown_header(current_day):
-    today = datetime.datetime.today().strftime("%A")  # Ensure today is defined
-    days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    today = datetime.datetime.today().strftime("%A")  # Ensure today is defined   
 
     # Use a tk.StringVar to store the selected day
     selected_day_var = tk.StringVar(value=current_day)
@@ -308,7 +305,7 @@ def create_dropdown_header(current_day):
         dark_mode_button.pack(side="right", padx=initial_button_pos+15)     
 
 def open_edit_dialog(day, start_time, end_time, activity):
-	
+    
     aliases = scheduler.load_aliases()  # Load alias mappings
 
     # Resolve alias dynamically
@@ -317,7 +314,7 @@ def open_edit_dialog(day, start_time, end_time, activity):
         if day in mapped_days:
             actual_day = alias
             break  # Stop checking once an alias is found
-			
+            
     edit_window = tk.Toplevel(header_frame)
     edit_window.title("Edit Event")
     edit_window.geometry("300x200")
