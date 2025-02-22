@@ -164,12 +164,6 @@ def update_json_schedule(day, old_start, new_start, new_end, new_activity):
             events[i][1] = entry[1].replace(temp_marker, "").strip()
             print(f"✅ Finalized event: {events[i][0]} {events[i][1]}")
 
-    # **Step 2: Call `check_for_overlap()` BEFORE inserting the new event**
-    check_for_overlap(actual_day, new_start, new_end, expanded_schedule)
-
-    # **Step 3: Insert the modified event while ensuring conflicts are resolved**
-    events.append([f"{new_start} - {new_end}", new_activity])
-
     # **Step 4: Call `check_for_overlap()` again AFTER inserting the new event**
     check_for_overlap(actual_day, new_start, new_end, expanded_schedule)
 
