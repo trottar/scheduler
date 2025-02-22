@@ -384,13 +384,17 @@ def update_schedule(selected_day=None):
     
     today = datetime.datetime.today().strftime("%A")
 
+    # Preserve user-selected day instead of resetting to today
     if selected_day is None:
-        selected_day = today
+        selected_day = day_dropdown.get() if 'day_dropdown' in globals() else datetime.datetime.today().strftime("%A")
 
     full_schedule = scheduler.load_schedule()
     today_schedule = full_schedule.get(selected_day, [])
 
-    # Clear previous entries
+    # Prevent duplicate updates by first clearing any scheduled future calls
+    header_frame.after_cancel(update_schedule)
+
+    # Clear previous entries (resets the schedule properly)
     for widget in frame_inner.winfo_children():
         widget.destroy()
 
@@ -450,7 +454,12 @@ def update_schedule(selected_day=None):
 
     # Add weekly summary
     display_weekly_summary()
-    header_frame.after(60000, lambda: update_schedule(selected_day))  # Auto-refresh
+    # Ensure only one auto-update is scheduled at a time
+    if hasattr(header_frame, "_update_task"):
+        header_frame.after_cancel(header_frame._update_task)
+
+    # Schedule the next update properly
+    header_frame._update_task = header_frame.after(60000, lambda: update_schedule(selected_day))
 
 # Function to display weekly summary with fixed end time handling
 def display_weekly_summary():
