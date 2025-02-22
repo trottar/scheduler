@@ -443,7 +443,19 @@ def update_schedule(selected_day=None):
     # ✅ Call adjust_schedule() to fix Bedtime before using full_schedule
     full_schedule = scheduler.adjust_schedule(full_schedule)
     
-    today_schedule = full_schedule.get(selected_day, [])
+    # Ensure alias resolution before fetching schedule
+    aliases = scheduler.load_aliases()
+    actual_day = selected_day
+
+    for alias, mapped_days in aliases.items():
+        if selected_day in mapped_days:
+            actual_day = alias
+            break
+
+    today_schedule = full_schedule.get(actual_day, [])
+
+    # Debugging output to confirm what day is actually being fetched
+    #print(f"🔍 Debug: Fetching schedule for {selected_day} → {actual_day}: {today_schedule}")
 
     # Prevent duplicate updates by first clearing any scheduled future calls
     header_frame.after_cancel(update_schedule)

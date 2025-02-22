@@ -384,32 +384,30 @@ def check_for_overlap(day, start, end, schedule):
 
 # Function to expand schedule templates (MW & TTh)
 def expand_schedule(schedule):
-    """Expands MW and TTh placeholders to actual schedules, handling missing templates safely."""
+    """Expands MW and TTh placeholders into actual schedules for their respective days."""
     expanded_schedule = {}
+    aliases = load_aliases()  # Load dynamic alias mappings
 
-    aliases = load_aliases()  # Load aliases dynamically
-
-    # Initialize template storage dynamically
-    templates = {alias: schedule.get(alias, []) for alias in aliases}
-
-    # Dynamically expand alias-based schedules instead of hardcoding MW/TTh
     for day, tasks in schedule.items():
         if day in aliases:  # Skip alias template days themselves
             continue
 
-        # Dynamically replace mapped days with their alias data
-        for alias, mapped_days in aliases.items():
-            if tasks == alias:
-                expanded_schedule[day] = list(schedule.get(alias, []))  # Ensure a deep copy
-                break
+        # If a day is assigned an alias (MW/TTh), fetch the corresponding schedule
+        if isinstance(tasks, str) and tasks in schedule:
+            expanded_schedule[day] = list(schedule.get(tasks, []))  # Ensure a deep copy
         else:
-            expanded_schedule[day] = tasks  # Keep normal days unchanged
+            expanded_schedule[day] = tasks  # Normal days remain unchanged
 
-    # Preserve alias templates after modification
+    # Ensure the alias keys themselves also exist in the final schedule
     for alias, mapped_days in aliases.items():
-        if all(day in expanded_schedule for day in mapped_days):
-            schedule[alias] = expanded_schedule[mapped_days[0]]  # Assign first mapped day's events to alias
+        if alias in schedule:
+            expanded_schedule[alias] = list(schedule.get(alias, []))  # Copy alias schedule
+            for mapped_day in mapped_days:
+                expanded_schedule[mapped_day] = list(schedule.get(alias, []))  # Copy alias to mapped days
 
+    #print(f"🔍 Debug: Expanded Schedule Keys: {list(expanded_schedule.keys())}")
+    #print(f"🔍 Debug: MW Data: {expanded_schedule.get('MW', 'MISSING')}")
+    #print(f"🔍 Debug: TTh Data: {expanded_schedule.get('TTh', 'MISSING')}")
     return expanded_schedule
 
 # Function to parse time string and calculate duration (handling overnight cases)
