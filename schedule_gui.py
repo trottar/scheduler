@@ -15,6 +15,7 @@ import datetime
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
+from PIL import Image, ImageTk
 import scheduler  # Importing the scheduler script to fetch the expanded schedule
 import sys
 import os
@@ -622,8 +623,37 @@ def get_today_schedule():
 
 # Initialize Tkinter GUI
 header_frame = tk.Tk()
+    
 header_frame.title("Daily Schedule Viewer")
 header_frame.geometry("800x600")
+
+# Custom window frame for close and minimize buttons
+window_frame = tk.Frame(header_frame, bg="#1e1e1e", relief="raised", bd=2)
+window_frame.pack(fill="x", side="top", anchor="n")
+
+# Close button
+close_button = tk.Button(window_frame, text="✖", command=header_frame.destroy, bg="#1e1e1e", fg="white", borderwidth=0)
+close_button.pack(side="right", padx=5, pady=2)
+
+# Minimize button
+def minimize_window():
+    header_frame.wm_state('iconic')  # Minimize window
+
+minimize_button = tk.Button(window_frame, text="🗕", command=minimize_window, bg="#1e1e1e", fg="white", borderwidth=0)
+minimize_button.pack(side="right", padx=5, pady=2)
+
+# Enable dragging of the window
+def start_move(event):
+    header_frame.x_offset = event.x
+    header_frame.y_offset = event.y
+
+def move_window(event):
+    x = header_frame.winfo_x() + (event.x - header_frame.x_offset)
+    y = header_frame.winfo_y() + (event.y - header_frame.y_offset)
+    header_frame.geometry(f"+{x}+{y}")
+
+window_frame.bind("<ButtonPress-1>", start_move)
+window_frame.bind("<B1-Motion>", move_window)
 
 header_frame.bind("<ButtonPress-1>", start_move)
 header_frame.bind("<B1-Motion>", move_window)
