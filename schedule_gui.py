@@ -25,10 +25,16 @@ import platform
 import webbrowser
 
 # Constants
-scheduler_dir = "/mnt/d/papatrott/Documents/Programs/scheduler"
-filename = f"{scheduler_dir}/winter2025.json"
-LOCK_FILE = f"{scheduler_dir}/schedule_gui.lock"
 days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+# Determine the directory of the current script
+scheduler_dir = os.path.dirname(os.path.abspath(__file__))
+LOCK_FILE = f"{scheduler_dir}/schedule_gui.lock"
+filename = os.path.join(scheduler_dir, "winter2025.json")
+config_filename = os.path.join(scheduler_dir, "config.json")
+backup_dir = os.path.join(scheduler_dir, "backups")
+
+# Ensure backup directory exists
+os.makedirs(backup_dir, exist_ok=True)
 
 # Function to check for an existing lock file (prevents multiple instances)
 def check_running_instance():
@@ -238,8 +244,7 @@ def get_next_day_start_time(schedule, current_day):
     return None  # No next-day event found
 
 def undo_last_change():
-    """Restores the most recent backup available, allowing multiple undos."""
-    backup_dir = f"{scheduler_dir}/backups/"
+    """Restores the most recent backup available, allowing multiple undos."""   
     existing_backups = sorted(
         [f for f in os.listdir(backup_dir) if f.startswith("winter2025_backup")],
         reverse=True
