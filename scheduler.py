@@ -24,14 +24,14 @@ filename = f"{scheduler_dir}/winter2025.json"
 def load_aliases():
     """Loads alias mappings from config.json."""
     try:
-        with open("config.json", "r") as file:
+        with open(f"{scheduler_dir}/config.json", "r") as file:
             config = json.load(file)
             return config.get("aliases", {})  # Default to empty if missing
     except FileNotFoundError:
         return {}  # Safe fallback if config.json is missing
 
 # Load the schedule from the JSON file
-def load_schedule(filename="winter2025.json"):
+def load_schedule():
     """Loads the schedule and ensures it is sorted with 5:00 AM as the new day start."""
     with open(filename, "r") as file:
         schedule = json.load(file)
@@ -69,17 +69,17 @@ def sort_schedule(schedule):
         # ✅ Sort strictly by start time
         schedule[day] = sorted(schedule[day], key=event_key)
 
-    return 		
+    return schedule
 
 def backup_schedule():
     """Creates a timestamped backup of winter2025.json and maintains a history."""
-    backup_dir = f"{scheduler_dir}/backups"
+    backup_dir = f"{scheduler_dir}/backups/"
     os.makedirs(backup_dir, exist_ok=True)  # Ensure backup directory exists
 
     # Create a timestamped backup filename
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     backup_file = os.path.join(backup_dir, f"winter2025_backup_{timestamp}.json")
-    original_file = "winter2025.json"
+    original_file = filename
 
     try:
         shutil.copyfile(original_file, backup_file)

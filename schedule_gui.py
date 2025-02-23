@@ -24,7 +24,10 @@ import shutil
 import platform
 import webbrowser
 
-LOCK_FILE = "schedule_gui.lock"
+# Constants
+scheduler_dir = "/mnt/d/papatrott/Documents/Programs/scheduler"
+filename = f"{scheduler_dir}/winter2025.json"
+LOCK_FILE = f"{scheduler_dir}/schedule_gui.lock"
 days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 # Function to check for an existing lock file (prevents multiple instances)
@@ -50,14 +53,14 @@ atexit.register(remove_lock_file)
 # Load user preferences
 def load_preferences():
     try:
-        with open("config.json", "r") as file:
+        with open(f"{scheduler_dir}/config.json", "r") as file:
             return json.load(file)
     except FileNotFoundError:
         return {"dark_mode": False}  # Default to Light Mode
 
 # Save user preferences
 def save_preferences(preferences):
-    with open("config.json", "w") as file:
+    with open(f"{scheduler_dir}/config.json", "w") as file:
         json.dump(preferences, file)
 
 # Toggle Dark Mode
@@ -236,7 +239,7 @@ def get_next_day_start_time(schedule, current_day):
 
 def undo_last_change():
     """Restores the most recent backup available, allowing multiple undos."""
-    backup_dir = f"{scheduler_dir}/backups"
+    backup_dir = f"{scheduler_dir}/backups/"
     existing_backups = sorted(
         [f for f in os.listdir(backup_dir) if f.startswith("winter2025_backup")],
         reverse=True
@@ -247,7 +250,7 @@ def undo_last_change():
         return
 
     latest_backup = os.path.join(backup_dir, existing_backups[0])
-    original_file = "winter2025.json"
+    original_file = filename
 
     # Extract the timestamp from the filename
     try:
